@@ -58,7 +58,9 @@ class Policy(nn.Module):
     def __init__(self, num_inputs, num_outputs):
         super(Policy, self).__init__()
         self.affine1 = nn.Linear(num_inputs, 64)
+
         self.affine2 = nn.Linear(64, 64)
+
         self.action_mean = nn.Linear(64, num_outputs)
         self.action_mean.weight.data.mul_(0.1)
         self.action_mean.bias.data.mul_(0.0)
@@ -93,6 +95,7 @@ class Policy(nn.Module):
         return ent
 
     def forward(self, x, old=False):
+
         if old:
             x = F.tanh(self.module_list_old[0](x))
             x = F.tanh(self.module_list_old[1](x))
@@ -102,13 +105,65 @@ class Policy(nn.Module):
             action_std = torch.exp(action_log_std)
         else:
             x = F.tanh(self.affine1(x))
+
             x = F.tanh(self.affine2(x))
+
 
             action_mean = self.action_mean(x)
             action_log_std = self.action_log_std.expand_as(action_mean)
             action_std = torch.exp(action_log_std)
 
         return action_mean, action_log_std, action_std
+
+
+
+
+class PolicyLayerNorm(nn.Module):
+    def __init__(self, num_inputs, num_outputs):
+        super(PolicyLayerNorm, self).__init__()
+        self.affine1 = nn.Linear(num_inputs, 64)
+        self.layer_norm = nn.LayerNorm(64)
+        self.affine2 = nn.Linear(64, 64)
+
+        self.action_mean = nn.Linear(64, num_outputs)
+        self.action_mean.weight.data.mul_(0.1)
+        self.action_mean.bias.data.mul_(0.0)
+        self.action_log_std = nn.Parameter(torch.zeros(1, num_outputs))
+        self.module_list_current = [self.affine1, self.affine2, self.action_mean, self.action_log_std]
+
+        self.module_list_old = [None] * len(
+            self.module_list_current)  # self.affine1_old, self.affine2_old, self.action_mean_old, self.action_log_std_old]
+        self.backup()
+
+    def parameter_noise(self,sigma):
+        noise = torch.normal(mean=0,std=sigma,size=(1,64))
+        return noise
+
+    def backup(self):
+        for i in range(len(self.module_list_current)):
+            self.module_list_old[i] = copy.deepcopy(self.module_list_current[i])
+
+    def forward(self, x, sigma, old=False):
+        # print('with noise')
+        if old:
+            x = self.layer_norm(F.tanh(self.module_list_old[0](x)))
+            x += self.parameter_noise(sigma=sigma)
+            x = self.layer_norm(F.tanh(self.module_list_old[1](x)))
+            x += self.parameter_noise(sigma=sigma)
+            action_mean = self.module_list_old[2](x)
+            action_log_std = self.module_list_old[3].expand_as(action_mean)
+            action_std = torch.exp(action_log_std)
+        else:
+            x = self.layer_norm(F.tanh(self.affine1(x)))
+            x += self.parameter_noise(sigma=sigma)
+            x = self.layer_norm(F.tanh(self.affine2(x)))
+            x += self.parameter_noise(sigma=sigma)
+            action_mean = self.action_mean(x)
+            action_log_std = self.action_log_std.expand_as(action_mean)
+            action_std = torch.exp(action_log_std)
+
+        return action_mean, action_log_std, action_std
+
 
 
 class Value(nn.Module):

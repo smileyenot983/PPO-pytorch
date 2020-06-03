@@ -17,11 +17,21 @@ import torch.optim as optim
 import torchvision.transforms as T
 from torch.autograd import Variable
 
-from models import Policy, Value, ActorCritic
+from models import Policy, Value, ActorCritic, PolicyLayerNorm
 from replay_memory import Memory
 from running_state import ZFilter
 
+import matplotlib.pyplot as plt
 # from utils import *
+
+import cartpole_swingup
+import pybulletgym
+
+import sparseMuJoCo
+
+
+
+
 
 torch.set_default_tensor_type('torch.DoubleTensor')
 PI = torch.DoubleTensor([3.1415926])
@@ -53,8 +63,18 @@ parser.add_argument('--clip-epsilon', type=float, default=0.2, metavar='N',
                     help='Clipping for PPO grad')
 parser.add_argument('--use-joint-pol-val', action='store_true',
                     help='whether to use combined policy and value nets')
-args = parser.parse_args()
+parser.add_argument('--use-parameter-noise', default=False,
+                    help='add noise to weights of actor network')
+parser.add_argument('--max-episodes', type=int,default=2000,help='max number of episodes to train ')
+# parser.add_argument('--layer-normalization', type=bool, default=False,
+#                     help='layer normalization for first 2 layers in order to use parameter noise')
+parser.add_argument('--plot-name', type=str, default='PPO rewards',
+                    help='name of plot')
 
+
+
+args = parser.parse_args()
+print(args.use_parameter_noise)
 env = gym.make(args.env_name)
 
 num_inputs = env.observation_space.shape[0]
@@ -66,15 +86,24 @@ torch.manual_seed(args.seed)
 if args.use_joint_pol_val:
     ac_net = ActorCritic(num_inputs, num_actions)
     opt_ac = optim.Adam(ac_net.parameters(), lr=0.001)
+elif args.use_parameter_noise:
+    policy_net = PolicyLayerNorm(num_inputs, num_actions)
+    value_net = Value(num_inputs)
+    opt_policy = optim.Adam(policy_net.parameters(), lr=0.001)
+    opt_value = optim.Adam(value_net.parameters(), lr=0.001)
 else:
     policy_net = Policy(num_inputs, num_actions)
     value_net = Value(num_inputs)
     opt_policy = optim.Adam(policy_net.parameters(), lr=0.001)
     opt_value = optim.Adam(value_net.parameters(), lr=0.001)
 
-def select_action(state):
+def select_action(state,sigma):
     state = torch.from_numpy(state).unsqueeze(0)
-    action_mean, _, action_std = policy_net(Variable(state))
+    if args.use_parameter_noise:
+        action_mean, _, action_std = policy_net(Variable(state),sigma)
+    else:
+
+        action_mean, _, action_std = policy_net(Variable(state))
     action = torch.normal(action_mean, action_std)
     return action
 
@@ -149,7 +178,7 @@ def update_params_actor_critic(batch):
     opt_ac.step()
 
 
-def update_params(batch):
+def update_params(batch,sigma):
     rewards = torch.Tensor(batch.reward)
     masks = torch.Tensor(batch.mask)
     actions = torch.Tensor(np.concatenate(batch.action, 0))
@@ -186,10 +215,20 @@ def update_params(batch):
 
     action_var = Variable(actions)
 
-    action_means, action_log_stds, action_stds = policy_net(Variable(states))
+    if args.use_parameter_noise:
+
+        action_means, action_log_stds, action_stds = policy_net(Variable(states),sigma)
+    else:
+        action_means, action_log_stds, action_stds = policy_net(Variable(states))
     log_prob_cur = normal_log_density(action_var, action_means, action_log_stds, action_stds)
 
-    action_means_old, action_log_stds_old, action_stds_old = policy_net(Variable(states), old=True)
+
+    if args.use_parameter_noise:
+        action_means_old, action_log_stds_old, action_stds_old = policy_net(Variable(states),sigma, old=True)
+
+    else:
+        action_means_old, action_log_stds_old, action_stds_old = policy_net(Variable(states), old=True)
+
     log_prob_old = normal_log_density(action_var, action_means_old, action_log_stds_old, action_stds_old)
 
     # backup params after computing probs but before updating new params
@@ -207,26 +246,72 @@ def update_params(batch):
     torch.nn.utils.clip_grad_norm(policy_net.parameters(), 40)
     opt_policy.step()
 
+def policies_distance(batch,sigma):
+
+    policy_perturbed = PolicyLayerNorm(num_inputs, num_actions)
+
+    # add_noise(policy_perturbed,sigma)
+
+    states = torch.Tensor(batch.state)
+    action_means, action_log_stds, action_stds = policy_net(Variable(states),sigma)
+    action_means_perturbed, _,_ = policy_perturbed(Variable(states),sigma)
+    # action_means_old, action_log_stds_old, action_stds_old = policy_net(Variable(states), old=True)
+
+    distance = torch.sum((action_means - action_means_perturbed)**2)**0.5
+    return distance
+
+
+#adding normal noise with given std to an actor network
+def add_noise(policy,std):
+    n_normalized_layers = 2
+
+    noise1 = torch.normal(mean=0,std=std,size=(policy.affine1.weight.shape))
+    noise2 = torch.normal(mean=0,std=std,size=(policy.affine2.weight.shape))
+
+    with torch.no_grad():
+        policy.affine1.weight += noise1
+        policy.affine2.weight += noise2
+        # policy.affine1.weight
+
+
+
 running_state = ZFilter((num_inputs,), clip=5)
 running_reward = ZFilter((1,), demean=False, clip=10)
 episode_lengths = []
 
-for i_episode in count(1):
-    memory = Memory()
+#hyperparameters for parameter noise
+#noise std
+sigma = 0.1
+sigma_scalefactor = 1.01
+distance_threshold = 0.01 * args.batch_size
+perturbation_timestep = 2
+n_updates = 0
 
+rewards_returned = []
+
+for i_episode in range(args.max_episodes):
+# for i_episode in count(1):
+    #create memory to save experience
+    memory = Memory()
     num_steps = 0
     reward_batch = 0
     num_episodes = 0
+
+    #default batch size = 5000
     while num_steps < args.batch_size:
+
+        # if args.use_parameter_noise:
+        #     add_noise(policy_net,sigma)
+
         state = env.reset()
         state = running_state(state)
 
         reward_sum = 0
-        for t in range(10000): # Don't infinite loop while learning
+        for t in range(500): # Don't infinite loop while learning
             if args.use_joint_pol_val:
                 action = select_action_actor_critic(state)
             else:
-                action = select_action(state)
+                action = select_action(state,sigma)
             action = action.data[0].numpy()
             next_state, reward, done, _ = env.step(action)
             reward_sum += reward
@@ -239,23 +324,61 @@ for i_episode in count(1):
 
             memory.push(state, np.array([action]), mask, next_state, reward)
 
-            if args.render:
+            if args.render and i_episode>=20:
                 env.render()
             if done:
                 break
 
             state = next_state
+
         num_steps += (t-1)
         num_episodes += 1
         reward_batch += reward_sum
+
+        # print('came')
+
+
+
+    # if i_episode%perturbation_timestep and args.use_parameter_noise:
+    #     current_distance = policies_distance(batch)
+    #     print(current_distance)
+    #     if current_distance > distance_threshold:
+    #         sigma /= sigma_scalefactor
+    #     else:
+    #         sigma *= sigma_scalefactor
+
+
 
     reward_batch /= num_episodes
     batch = memory.sample()
     if args.use_joint_pol_val:
         update_params_actor_critic(batch)
     else:
-        update_params(batch)
+        update_params(batch,sigma)
+    rewards_returned.append(reward_batch)
+    if args.use_parameter_noise:
+        current_distance = policies_distance(memory.sample(), sigma)
+        print(current_distance)
+        if current_distance > distance_threshold:
+            sigma /= sigma_scalefactor
+        else:
+            sigma *= sigma_scalefactor
+
+
 
     if i_episode % args.log_interval == 0:
-        print('Episode {}\tLast reward: {}\tAverage reward {:.2f}'.format(
-            i_episode, reward_sum, reward_batch))
+        print('Episode {}\tLast reward: {} \t Average reward {:.2f} \t Sigma {}'.format(
+            i_episode, reward_sum, reward_batch, sigma))
+
+
+# rewards_plot = []
+# plot_step=100
+# for i in range(len(rewards_returned)//plot_step-1):
+#     rewards_plot.append(np.mean(rewards_returned[i*plot_step:(i+1)*plot_step]))
+
+t = np.arange(len(rewards_returned))
+
+plt.scatter(t,rewards_returned)
+plt.ylabel('Rewards')
+plt.savefig(args.plot_name + '.png')
+plt.show()
