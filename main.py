@@ -63,7 +63,7 @@ parser.add_argument('--clip-epsilon', type=float, default=0.2, metavar='N',
                     help='Clipping for PPO grad')
 parser.add_argument('--use-joint-pol-val', action='store_true',
                     help='whether to use combined policy and value nets')
-parser.add_argument('--use-parameter-noise', default=False,
+parser.add_argument('--use-parameter-noise', action='store_true',
                     help='add noise to weights of actor network')
 parser.add_argument('--max-episodes', type=int,default=2000,help='max number of episodes to train ')
 # parser.add_argument('--layer-normalization', type=bool, default=False,
@@ -283,7 +283,8 @@ episode_lengths = []
 #noise std
 sigma = 0.1
 sigma_scalefactor = 1.01
-distance_threshold = 0.01 * args.batch_size
+# distance_threshold = 0.01 * args.batch_size
+distance_threshold = 0.001 * args.batch_size
 perturbation_timestep = 2
 n_updates = 0
 
@@ -307,7 +308,7 @@ for i_episode in range(args.max_episodes):
         state = running_state(state)
 
         reward_sum = 0
-        for t in range(500): # Don't infinite loop while learning
+        for t in range(1000): # Don't infinite loop while learning
             if args.use_joint_pol_val:
                 action = select_action_actor_critic(state)
             else:
