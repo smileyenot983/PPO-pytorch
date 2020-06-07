@@ -70,6 +70,8 @@ parser.add_argument('--max-episodes', type=int,default=2000,help='max number of 
 #                     help='layer normalization for first 2 layers in order to use parameter noise')
 parser.add_argument('--plot-name', type=str, default='PPO rewards',
                     help='name of plot')
+parser.add_argument('--sigma-adaptive',action='store_true',help='whether to use adaptive sigma or not')
+parser.add_argument('--sigma-initial',default=0.1,help='initial value for noise')
 
 
 
@@ -281,10 +283,10 @@ episode_lengths = []
 
 #hyperparameters for parameter noise
 #noise std
-sigma = 0.1
+sigma = args.sigma_initial
 sigma_scalefactor = 1.01
-# distance_threshold = 0.01 * args.batch_size
-distance_threshold = 0.001 * args.batch_size
+distance_threshold = 0.01 * args.batch_size
+# distance_threshold = 0.001 * args.batch_size
 perturbation_timestep = 2
 n_updates = 0
 
@@ -357,7 +359,7 @@ for i_episode in range(args.max_episodes):
     else:
         update_params(batch,sigma)
     rewards_returned.append(reward_batch)
-    if args.use_parameter_noise:
+    if args.use_parameter_noise and args.sigma_adaptive:
         current_distance = policies_distance(memory.sample(), sigma)
         print(current_distance)
         if current_distance > distance_threshold:
