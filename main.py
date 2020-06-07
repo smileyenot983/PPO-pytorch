@@ -283,7 +283,7 @@ episode_lengths = []
 
 #hyperparameters for parameter noise
 #noise std
-sigma = args.sigma_initial
+sigma = float(args.sigma_initial)
 sigma_scalefactor = 1.01
 distance_threshold = 0.01 * args.batch_size
 # distance_threshold = 0.001 * args.batch_size
@@ -365,6 +365,7 @@ for i_episode in range(args.max_episodes):
         if current_distance > distance_threshold:
             sigma /= sigma_scalefactor
         else:
+
             sigma *= sigma_scalefactor
 
 
@@ -384,4 +385,4 @@ t = np.arange(len(rewards_returned))
 plt.scatter(t,rewards_returned)
 plt.ylabel('Rewards')
 plt.savefig(args.plot_name + '.png')
-plt.show()
+# plt.show()

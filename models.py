@@ -148,18 +148,18 @@ class PolicyLayerNorm(nn.Module):
         if old:
             x = self.layer_norm(F.tanh(self.module_list_old[0](x)))
 
-            x += self.parameter_noise(sigma=0.2)
+            x += self.parameter_noise(sigma=sigma)
             x = self.layer_norm(F.tanh(self.module_list_old[1](x)))
-            x += self.parameter_noise(sigma=0.2)
+            x += self.parameter_noise(sigma=sigma)
             action_mean = self.module_list_old[2](x)
             action_log_std = self.module_list_old[3].expand_as(action_mean)
             action_std = torch.exp(action_log_std)
         else:
             x = self.layer_norm(F.tanh(self.affine1(x)))
 
-            x += self.parameter_noise(sigma=0.2)
+            x += self.parameter_noise(sigma=sigma)
             x = self.layer_norm(F.tanh(self.affine2(x)))
-            x += self.parameter_noise(sigma=0.2)
+            x += self.parameter_noise(sigma=sigma)
             action_mean = self.action_mean(x)
             action_log_std = self.action_log_std.expand_as(action_mean)
             action_std = torch.exp(action_log_std)
