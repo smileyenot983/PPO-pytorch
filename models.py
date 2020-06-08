@@ -116,12 +116,15 @@ class Policy(nn.Module):
         return action_mean, action_log_std, action_std
 
 
-
-
+#TODO add forward prop without noise
+#modified policy network
+#1. layer normalization after first 2 activations
+#2. adding noise with a given std after layer normalizations
 class PolicyLayerNorm(nn.Module):
     def __init__(self, num_inputs, num_outputs):
         super(PolicyLayerNorm, self).__init__()
         self.affine1 = nn.Linear(num_inputs, 64)
+        #normalization layer
         self.layer_norm = nn.LayerNorm(64)
         self.affine2 = nn.Linear(64, 64)
 
@@ -135,6 +138,8 @@ class PolicyLayerNorm(nn.Module):
             self.module_list_current)  # self.affine1_old, self.affine2_old, self.action_mean_old, self.action_log_std_old]
         self.backup()
 
+    #function which produces parameter noise
+    #normal distribution with mean=0,std should be given
     def parameter_noise(self,sigma):
         noise = torch.normal(mean=0,std=sigma,size=(1,64))
         return noise
@@ -143,28 +148,57 @@ class PolicyLayerNorm(nn.Module):
         for i in range(len(self.module_list_current)):
             self.module_list_old[i] = copy.deepcopy(self.module_list_current[i])
 
-    def forward(self, x, sigma, old=False):
+    def forward(self, x, sigma, old=False,param_noise=False):
         # print('with noise')
-        if old:
-            x = self.layer_norm(F.tanh(self.module_list_old[0](x)))
+        if param_noise:
+            if old:
+                # normalization added
+                x = self.layer_norm(F.tanh(self.module_list_old[0](x)))
+                # parameter noise
+                x += self.parameter_noise(sigma=sigma)
+                # normalization added
+                x = self.layer_norm(F.tanh(self.module_list_old[1](x)))
+                # parameter nosie
+                x += self.parameter_noise(sigma=sigma)
+                action_mean = self.module_list_old[2](x)
+                action_log_std = self.module_list_old[3].expand_as(action_mean)
+                action_std = torch.exp(action_log_std)
+            else:
+                x = self.layer_norm(F.tanh(self.affine1(x)))
 
-            x += self.parameter_noise(sigma=sigma)
-            x = self.layer_norm(F.tanh(self.module_list_old[1](x)))
-            x += self.parameter_noise(sigma=sigma)
-            action_mean = self.module_list_old[2](x)
-            action_log_std = self.module_list_old[3].expand_as(action_mean)
-            action_std = torch.exp(action_log_std)
+                x += self.parameter_noise(sigma=sigma)
+                x = self.layer_norm(F.tanh(self.affine2(x)))
+                x += self.parameter_noise(sigma=sigma)
+                action_mean = self.action_mean(x)
+                action_log_std = self.action_log_std.expand_as(action_mean)
+                action_std = torch.exp(action_log_std)
+
+            return action_mean, action_log_std, action_std
         else:
-            x = self.layer_norm(F.tanh(self.affine1(x)))
+            if old:
+                # normalization added
+                x = F.tanh(self.module_list_old[0](x))
+                # parameter noise
+                # x += self.parameter_noise(sigma=sigma)
+                # normalization added
+                x = F.tanh(self.module_list_old[1](x))
+                # parameter nosie
+                # x += self.parameter_noise(sigma=sigma)
+                action_mean = self.module_list_old[2](x)
+                action_log_std = self.module_list_old[3].expand_as(action_mean)
+                action_std = torch.exp(action_log_std)
+            else:
+                x = self.layer_norm(F.tanh(self.affine1(x)))
 
-            x += self.parameter_noise(sigma=sigma)
-            x = self.layer_norm(F.tanh(self.affine2(x)))
-            x += self.parameter_noise(sigma=sigma)
-            action_mean = self.action_mean(x)
-            action_log_std = self.action_log_std.expand_as(action_mean)
-            action_std = torch.exp(action_log_std)
+                x += self.parameter_noise(sigma=sigma)
+                x = self.layer_norm(F.tanh(self.affine2(x)))
+                x += self.parameter_noise(sigma=sigma)
+                action_mean = self.action_mean(x)
+                action_log_std = self.action_log_std.expand_as(action_mean)
+                action_std = torch.exp(action_log_std)
 
-        return action_mean, action_log_std, action_std
+            return action_mean, action_log_std, action_std
+
 
 
 

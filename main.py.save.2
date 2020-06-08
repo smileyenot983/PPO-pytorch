@@ -31,8 +31,11 @@ import sparseMuJoCo
 
 
 
+
+
 torch.set_default_tensor_type('torch.DoubleTensor')
 PI = torch.DoubleTensor([3.1415926])
+python main.py --env-name CartPoleSwingUp-v3 --max-episodes 300  --plot-name Swingup_ConstantNoise_s1_std0.3 --seed 1  --sigma-initial 0.3 --use-parameter-noise
 
 parser = argparse.ArgumentParser(description='PyTorch actor-critic example')
 parser.add_argument('--gamma', type=float, default=0.995, metavar='G',
@@ -86,7 +89,6 @@ torch.manual_seed(args.seed)
 if args.use_joint_pol_val:
     ac_net = ActorCritic(num_inputs, num_actions)
     opt_ac = optim.Adam(ac_net.parameters(), lr=0.001)
-#Here if we are using parameter noise we should use modified policy network
 elif args.use_parameter_noise:
     policy_net = PolicyLayerNorm(num_inputs, num_actions)
     value_net = Value(num_inputs)
@@ -101,7 +103,7 @@ else:
 def select_action(state,sigma):
     state = torch.from_numpy(state).unsqueeze(0)
     if args.use_parameter_noise:
-        action_mean, _, action_std = policy_net(Variable(state),sigma,param_noise=True)
+        action_mean, _, action_std = policy_net(Variable(state),sigma)
     else:
 
         action_mean, _, action_std = policy_net(Variable(state))
@@ -218,14 +220,14 @@ def update_params(batch,sigma):
 
     if args.use_parameter_noise:
 
-        action_means, action_log_stds, action_stds = policy_net(Variable(states),sigma,param_noise=True)
+        action_means, action_log_stds, action_stds = policy_net(Variable(states),sigma)
     else:
         action_means, action_log_stds, action_stds = policy_net(Variable(states))
     log_prob_cur = normal_log_density(action_var, action_means, action_log_stds, action_stds)
 
 
     if args.use_parameter_noise:
-        action_means_old, action_log_stds_old, action_stds_old = policy_net(Variable(states),sigma, old=True,param_noise=True)
+        action_means_old, action_log_stds_old, action_stds_old = policy_net(Variable(states),sigma, old=True)
 
     else:
         action_means_old, action_log_stds_old, action_stds_old = policy_net(Variable(states), old=True)
@@ -247,37 +249,47 @@ def update_params(batch,sigma):
     torch.nn.utils.clip_grad_norm(policy_net.parameters(), 40)
     opt_policy.step()
 
-
-#calculating distance between 2 policies
 def policies_distance(batch,sigma):
 
+    policy_perturbed = PolicyLayerNorm(num_inputs, num_actions)
+
+    # add_noise(policy_perturbed,sigma)
+
     states = torch.Tensor(batch.state)
+    action_means, action_log_stds, action_stds = policy_net(Variable(states),sigma)
+    action_means_perturbed, _,_ = policy_perturbed(Variable(states),sigma)
+    # action_means_old, action_log_stds_old, action_stds_old = policy_net(Variable(states), old=True)
 
-    #forward propagation without parameter noise
-    action_means, action_log_stds, action_stds = policy_net(Variable(states),sigma,param_noise=False)
-    #forward propagation with parameter noise
-    action_means_perturbed, _,_ = policy_net(Variable(states),sigma,param_noise=True)
-
-    #euclidean distance between means of perturbed and non perturbed policies
     distance = torch.sum((action_means - action_means_perturbed)**2)**0.5
     return distance
+
+
+#adding normal noise with given std to an actor network
+def add_noise(policy,std):
+    n_normalized_layers = 2
+
+    noise1 = torch.normal(mean=0,std=std,size=(policy.affine1.weight.shape))
+    noise2 = torch.normal(mean=0,std=std,size=(policy.affine2.weight.shape))
+
+    with torch.no_grad():
+        policy.affine1.weight += noise1
+        policy.affine2.weight += noise2
+        # policy.affine1.weight
+
 
 
 running_state = ZFilter((num_inputs,), clip=5)
 running_reward = ZFilter((1,), demean=False, clip=10)
 episode_lengths = []
 
-#HYPERPARAMETERS FOR PARAMETER NOISE
-#initial noise std
+#hyperparameters for parameter noise
+#noise std
 sigma = float(args.sigma_initial)
-#scalefactor for adapting noise, we will multiply or divide by this number to adapt sigma for noise
 sigma_scalefactor = 1.01
-#distance threshold for adapting noise
-distance_threshold = 1
+distance_threshold = 0.01 * args.batch_size
 # distance_threshold = 0.001 * args.batch_size
-#perturbation frequency
 perturbation_timestep = 2
-
+n_updates = 0
 
 rewards_returned = []
 
@@ -292,7 +304,8 @@ for i_episode in range(args.max_episodes):
     #default batch size = 5000
     while num_steps < args.batch_size:
 
-
+        # if args.use_parameter_noise:
+        #     add_noise(policy_net,sigma)
 
         state = env.reset()
         state = running_state(state)
@@ -328,6 +341,18 @@ for i_episode in range(args.max_episodes):
 
         # print('came')
 
+
+
+    # if i_episode%perturbation_timestep and args.use_parameter_noise:
+    #     current_distance = policies_distance(batch)
+    #     print(current_distance)
+    #     if current_distance > distance_threshold:
+    #         sigma /= sigma_scalefactor
+    #     else:
+    #         sigma *= sigma_scalefactor
+
+
+
     reward_batch /= num_episodes
     batch = memory.sample()
     if args.use_joint_pol_val:
@@ -335,16 +360,13 @@ for i_episode in range(args.max_episodes):
     else:
         update_params(batch,sigma)
     rewards_returned.append(reward_batch)
-
-    #adaptive std for parameter noise
-    #1. computes current distance between perturbed and non perturbed policies
-    #2. if distance higher than threshold -> reduce std, if less -> increase
     if args.use_parameter_noise and args.sigma_adaptive:
         current_distance = policies_distance(memory.sample(), sigma)
         print(current_distance)
         if current_distance > distance_threshold:
             sigma /= sigma_scalefactor
         else:
+
             sigma *= sigma_scalefactor
 
 
@@ -354,10 +376,14 @@ for i_episode in range(args.max_episodes):
             i_episode, reward_sum, reward_batch, sigma))
 
 
+# rewards_plot = []
+# plot_step=100
+# for i in range(len(rewards_returned)//plot_step-1):
+#     rewards_plot.append(np.mean(rewards_returned[i*plot_step:(i+1)*plot_step]))
 
 t = np.arange(len(rewards_returned))
 
 plt.scatter(t,rewards_returned)
 plt.ylabel('Rewards')
 plt.savefig(args.plot_name + '.png')
-# plt.show()
+plt.show()
