@@ -116,7 +116,7 @@ class Policy(nn.Module):
         return action_mean, action_log_std, action_std
 
 
-#TODO add forward prop without noise
+
 #modified policy network
 #1. layer normalization after first 2 activations
 #2. adding noise with a given std after layer normalizations
