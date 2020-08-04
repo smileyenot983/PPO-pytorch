@@ -2,7 +2,11 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="4386fc53-b2f0-4c97-8d45-2461ceaecf98" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/sparseMuJoCo/sparseMuJoCo/envs/mujoco/swimmer_v3.py" beforeDir="false" afterPath="$PROJECT_DIR$/sparseMuJoCo/sparseMuJoCo/envs/mujoco/swimmer_v3.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../main.py.save" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../main.py.save.1" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../main.py.save.2" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../main.py.save.3" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -22,7 +26,7 @@
     <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
     <property name="WebServerToolWindowFactoryState" value="false" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+    <property name="last_opened_file_path" value="$USER_HOME$/Internship2019/taichi-robots/pendubot" />
   </component>
   <component name="SvnConfiguration">
     <configuration />
@@ -35,10 +39,23 @@
       <option name="presentableId" value="Default" />
       <updated>1591383484122</updated>
       <workItem from="1591383485603" duration="856000" />
+      <workItem from="1594045693126" duration="8436000" />
+      <workItem from="1594113676889" duration="596000" />
+      <workItem from="1594116045108" duration="16000" />
     </task>
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="2" />
+  </component>
+  <component name="WindowStateProjectService">
+    <state x="776" y="310" width="424" height="484" key="FileChooserDialogImpl" timestamp="1594116059738">
+      <screen x="67" y="27" width="1853" height="1053" />
+    </state>
+    <state x="776" y="310" width="424" height="484" key="FileChooserDialogImpl/67.27.1853.1053@67.27.1853.1053" timestamp="1594116059738" />
+    <state x="656" y="257" width="672" height="678" key="search.everywhere.popup" timestamp="1594049256285">
+      <screen x="67" y="27" width="1853" height="1053" />
+    </state>
+    <state x="656" y="257" width="672" height="678" key="search.everywhere.popup/67.27.1853.1053@67.27.1853.1053" timestamp="1594049256285" />
   </component>
 </project>

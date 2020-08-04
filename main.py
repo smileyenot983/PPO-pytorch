@@ -25,9 +25,9 @@ import matplotlib.pyplot as plt
 # from utils import *
 
 import cartpole_swingup
-import pybulletgym
+# import pybulletgym
 
-import sparseMuJoCo
+# import sparseMuJoCo
 
 
 
@@ -70,7 +70,9 @@ parser.add_argument('--plot-name', type=str, default='PPO rewards',
                     help='name of plot')
 parser.add_argument('--sigma-adaptive',action='store_true',help='whether to use adaptive sigma or not')
 parser.add_argument('--sigma-initial',default=0.1,help='initial value for noise')
+parser.add_argument('--sigma-linear-scheduler', action='store_true')
 
+# parser.add_argument('--plot-folder', type=str, default='./plots', help='folder for storing plots')
 
 
 args = parser.parse_args()
@@ -278,8 +280,15 @@ distance_threshold = 1
 #perturbation frequency
 perturbation_timestep = 2
 
+#linearly decreasing sigma
+sigma_schedulefactor = 0.999
+
+
 
 rewards_returned = []
+
+
+
 
 for i_episode in range(args.max_episodes):
 # for i_episode in count(1):
@@ -347,6 +356,9 @@ for i_episode in range(args.max_episodes):
         else:
             sigma *= sigma_scalefactor
 
+    if args.use_parameter_noise and args.sigma_linear_scheduler:
+        sigma *= sigma_schedulefactor
+
 
 
     if i_episode % args.log_interval == 0:
@@ -359,5 +371,5 @@ t = np.arange(len(rewards_returned))
 
 plt.scatter(t,rewards_returned)
 plt.ylabel('Rewards')
-plt.savefig(args.plot_name + '.png')
+plt.savefig(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/' + str(args.plot_name) + '.png')
 # plt.show()
