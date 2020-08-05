@@ -11,7 +11,8 @@ parser.add_argument('--seed', type=int,default=666,help='seed')
 
 args = parser.parse_args()
 
-os.system("mkdir -p " + str(args.env_name) + "_tests/seed" + str(args.seed))
+os.system("mkdir -p " + str(args.env_name) + "_tests/seed" + str(args.seed) + "/plots")
+os.system("mkdir -p " + str(args.env_name) + "_tests/seed" + str(args.seed) + "/data")
 # os.system("cd " + str(args.env_name) + "_tests")
 
 

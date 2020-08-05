@@ -23,7 +23,7 @@ from running_state import ZFilter
 
 import matplotlib.pyplot as plt
 # from utils import *
-
+import pickle
 import cartpole_swingup
 # import pybulletgym
 
@@ -288,8 +288,6 @@ sigma_schedulefactor = 0.999
 rewards_returned = []
 
 
-
-
 for i_episode in range(args.max_episodes):
 # for i_episode in count(1):
     #create memory to save experience
@@ -366,10 +364,16 @@ for i_episode in range(args.max_episodes):
             i_episode, reward_sum, reward_batch, sigma))
 
 
-
 t = np.arange(len(rewards_returned))
+
+#saving data into a binary file
+with open(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/data/' + str(args.plot_name), 'wb') as f:
+    pickle.dump(rewards_returned,f)
+
+#loading data from binary file
+with open(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/data/' + str(args.plot_name), 'rb') as f:
+    rewards_returned = pickle.load(f)
 
 plt.scatter(t,rewards_returned)
 plt.ylabel('Rewards')
-plt.savefig(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/' + str(args.plot_name) + '.png')
-# plt.show()
+plt.savefig(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/plots/' + str(args.plot_name) + '.png')
