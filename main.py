@@ -71,6 +71,7 @@ parser.add_argument('--plot-name', type=str, default='PPO rewards',
 parser.add_argument('--sigma-adaptive',action='store_true',help='whether to use adaptive sigma or not')
 parser.add_argument('--sigma-initial',default=0.1,help='initial value for noise')
 parser.add_argument('--sigma-linear-scheduler', action='store_true')
+parser.add_argument('--sigma-exponential-scheduler', action='store_true')
 
 # parser.add_argument('--plot-folder', type=str, default='./plots', help='folder for storing plots')
 
@@ -356,6 +357,9 @@ for i_episode in range(args.max_episodes):
 
     if args.use_parameter_noise and args.sigma_linear_scheduler:
         sigma *= sigma_schedulefactor
+
+    if args.use_parameter_noise and args.sigma_exponential_scheduler:
+        sigma = sigma ** sigma_schedulefactor
 
 
 

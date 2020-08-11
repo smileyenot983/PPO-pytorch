@@ -16,10 +16,7 @@ os.system("mkdir -p " + str(args.env_name) + "_tests/seed" + str(args.seed) + "/
 # os.system("cd " + str(args.env_name) + "_tests")
 
 
-# #testing with adaptive sigma
-# os.system("python main.py --env-name " + str(args.env_name) + " --max-episodes " + str(args.max_episodes) + " --plot-name " + str(args.env_name)
-#               + "_Adaptnoise" + 's' + str(args.seed) + "std" + str(sigma) + " --seed " + str(args.seed) + " --sigma-initial " + str(0.1) +
-#               " --use-parameter-noise" + " --sigma-adaptive")
+
 
 #testing 3 cases
 #1. Without noise
@@ -38,7 +35,8 @@ os.system("python main.py --env-name " + str(args.env_name)
 
 
 '''run with constant sigma'''
-sigmas = [0.1,0.3,0.5,0.7,1.0]
+
+sigmas = [0.05,0.1,0.15]
 
 for sigma in sigmas:
     os.system("python main.py --env-name " + str(args.env_name) + " --max-episodes " + str(args.max_episodes) + " --plot-name " + str(args.env_name)
@@ -46,12 +44,24 @@ for sigma in sigmas:
               " --use-parameter-noise")
 
 '''run with linearly decreasing sigma'''
-sigma0 = [0.1,0.3,0.5]
 
-for sigma in sigma0:
+
+for sigma in sigmas:
     os.system("python main.py --env-name " + str(args.env_name) + " --max-episodes " + str(args.max_episodes) + " --plot-name " + str(args.env_name)
               + "_LinDecreasingNoise" + 's' + str(args.seed) + "std" + str(sigma) + " --seed " + str(args.seed) + " --sigma-initial " + str(sigma) +
               " --use-parameter-noise" + " --sigma-linear-scheduler")
+
+'''run with exponentially decreasing sigma'''
+for sigma in sigmas:
+    os.system("python main.py --env-name " + str(args.env_name) + " --max-episodes " + str(args.max_episodes) + " --plot-name " + str(args.env_name)
+              + "_ExpDecreasingNoise" + 's' + str(args.seed) + "std" + str(sigma) + " --seed " + str(args.seed) + " --sigma-initial " + str(sigma) +
+              " --use-parameter-noise" + " --sigma-exponential-scheduler")
+
+'''run with adaptive sigma'''
+#testing with adaptive sigma
+os.system("python main.py --env-name " + str(args.env_name) + " --max-episodes " + str(args.max_episodes) + " --plot-name " + str(args.env_name)
+              + "_Adaptnoise" + 's' + str(args.seed) + "std" + str(sigma) + " --seed " + str(args.seed) + " --sigma-initial " + str(0.1) +
+              " --use-parameter-noise" + " --sigma-adaptive")
 
 
 os.system("cd ..")
