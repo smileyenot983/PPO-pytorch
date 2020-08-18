@@ -9,14 +9,19 @@ parser.add_argument('--src', type=str, help='Name of folder which contains resul
 
 args = parser.parse_args()
 
-# src = './HopperBulletEnv-v0_tests2'
+# src = './CartPoleSwingUp-v3_tests'
 
 # n_seeds = len(os.listdir(args.src))
 
 n_seeds=0
 for f in os.listdir(args.src):
-    if not f.startswith('.'):
+# for f in os.listdir(src):
+
+    if f.startswith('seed'):
         n_seeds+=1
+
+
+
 # n_seeds = len(os.listdir(src))
 
 def load_data(data_src,data_dict,seed):
@@ -37,6 +42,7 @@ def load_data(data_src,data_dict,seed):
         if new_setting not in data_dict:
             data_dict[new_setting] = []
 
+
         # if settings_data[setting] not in settings:
         #     settings_data
         with open(data_src + '/' + setting,'rb') as f:
@@ -55,6 +61,15 @@ for seed in range(1,n_seeds+1):
     load_data(data_src,all_variations,seed)
     # os.chdir(src + '/seed' + str(1) + '/data')
 
+
+#   all_variations - dict, where
+#   key - type of noise
+#   value - list of lists
+#   all_variations[some_key][seed][experiment number]
+
+
+
+
 variations_averages = {}
 
 #key - different variations of noise
@@ -68,17 +83,26 @@ for key in all_variations.keys():
 
         exp_average = 0.0
         #taking values from all seeds
-        for seed in range(n_seeds):
-            # print(n_seeds)
+        #UPDATE - now it takes into account cases when n_seeds differ for different keys
+        key_seeds = len(all_variations[key])
+        for seed in range(key_seeds):
+
         #summing experiment rewards from all seeds
             exp_average += all_variations[key][seed][n_exp]
 
         #taking the average for experiment
-        exp_average /= n_seeds
+        exp_average /= key_seeds
 
         variations_averages[key].append(exp_average)
 
+
+#   variations_averages is a  dict where:
+#key - type of noise(const,adaptive,decreasing etc)
+#value - list of average rewards for n seeds
+
+
 ##plotting
+
 key1 = list(variations_averages.keys())[0]
 t = np.arange(len(variations_averages[key1]))
 # print(t)
