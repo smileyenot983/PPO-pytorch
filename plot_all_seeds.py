@@ -9,9 +9,15 @@ parser.add_argument('--src', type=str, help='Name of folder which contains resul
 
 args = parser.parse_args()
 
-# src = './CartPoleSwingUp-v3_tests'
+# src = './HopperBulletEnv-v0_tests2'
 
-n_seeds = len(os.listdir(args.src))
+# n_seeds = len(os.listdir(args.src))
+
+n_seeds=0
+for f in os.listdir(args.src):
+    if not f.startswith('.'):
+        n_seeds+=1
+# n_seeds = len(os.listdir(src))
 
 def load_data(data_src,data_dict,seed):
     '''function for loading data obtained from training'''
@@ -43,6 +49,8 @@ all_variations = {}
 for seed in range(1,n_seeds+1):
     #changing directory to given seed and opening folder which contains data
     data_src = args.src + '/seed' + str(seed) + '/data'
+    # data_src = src + '/seed' + str(seed) + '/data'
+
 
     load_data(data_src,all_variations,seed)
     # os.chdir(src + '/seed' + str(1) + '/data')
@@ -55,10 +63,13 @@ for key in all_variations.keys():
     variations_averages[key] = []
 
     #iterating through all experiments(300 in my case)
-    for n_exp in range(len(all_variations[key][0])):
+
+    for n_exp in range(len(all_variations[key][0])): #writing 0 to count number of experiments for seed 1
+
         exp_average = 0.0
         #taking values from all seeds
         for seed in range(n_seeds):
+            # print(n_seeds)
         #summing experiment rewards from all seeds
             exp_average += all_variations[key][seed][n_exp]
 
