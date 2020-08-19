@@ -3,9 +3,10 @@ import os
 import pickle
 import matplotlib.pyplot as plt
 import argparse
-
+from tensorboardX import SummaryWriter
 parser = argparse.ArgumentParser()
 parser.add_argument('--src', type=str, help='Name of folder which contains results of experiments(2 folders with data and plots)')
+parser.add_argument('--tensorboard', action='store_true')
 
 args = parser.parse_args()
 
@@ -76,7 +77,8 @@ variations_averages = {}
 for key in all_variations.keys():
 
     variations_averages[key] = []
-
+    if args.tensorboard:
+        writer = SummaryWriter(args.src + '/tensorboard/' + key)
     #iterating through all experiments(300 in my case)
 
     for n_exp in range(len(all_variations[key][0])): #writing 0 to count number of experiments for seed 1
@@ -94,7 +96,8 @@ for key in all_variations.keys():
         exp_average /= key_seeds
 
         variations_averages[key].append(exp_average)
-
+        if args.tensorboard:
+            writer.add_scalar('avg reward',exp_average,n_exp)
 
 #   variations_averages is a  dict where:
 #key - type of noise(const,adaptive,decreasing etc)
