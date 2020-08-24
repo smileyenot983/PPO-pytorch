@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 # from utils import *
 import pickle
 import cartpole_swingup
-# import pybulletgym
+import pybulletgym
 
 # import sparseMuJoCo
 
@@ -284,7 +284,7 @@ perturbation_timestep = 2
 #linearly decreasing sigma
 sigma_schedulefactor = 0.999
 
-
+adaptive_sigmas = []
 
 rewards_returned = []
 
@@ -299,8 +299,6 @@ for i_episode in range(args.max_episodes):
 
     #default batch size = 5000
     while num_steps < args.batch_size:
-
-
 
         state = env.reset()
         state = running_state(state)
@@ -323,7 +321,7 @@ for i_episode in range(args.max_episodes):
 
             memory.push(state, np.array([action]), mask, next_state, reward)
 
-            if args.render and i_episode>=20:
+            if args.render and i_episode >= 20:
                 env.render()
             if done:
                 break
@@ -336,8 +334,17 @@ for i_episode in range(args.max_episodes):
 
         # print('came')
 
+    #avergae policy reward
     reward_batch /= num_episodes
     batch = memory.sample()
+
+
+    #saving current model parameters(weights)
+    models_path = str(args.env_name) + "_tests" + "/seed" + str(args.seed) + "/parameters/episode_" + str(i_episode) + "/"  + str(args.plot_name)
+    torch.save(policy_net.state_dict(),models_path + "_policy")
+    torch.save(value_net.state_dict(),models_path + "_value")
+
+
     if args.use_joint_pol_val:
         update_params_actor_critic(batch)
     else:
@@ -350,6 +357,8 @@ for i_episode in range(args.max_episodes):
     if args.use_parameter_noise and args.sigma_adaptive:
         current_distance = policies_distance(memory.sample(), sigma)
         print(current_distance)
+        #saving behaviour of sigma
+        adaptive_sigmas.append(sigma)
         if current_distance > distance_threshold:
             sigma /= sigma_scalefactor
         else:
@@ -369,6 +378,10 @@ for i_episode in range(args.max_episodes):
 
 
 t = np.arange(len(rewards_returned))
+
+#saving data into a binary file
+with open(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/adaptive_sigma/' + 'adaptive_sigma_behaviour', 'wb') as f:
+    pickle.dump(adaptive_sigmas,f)
 
 #saving data into a binary file
 with open(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/data/' + str(args.plot_name), 'wb') as f:

@@ -13,6 +13,13 @@ args = parser.parse_args()
 
 os.system("mkdir -p " + str(args.env_name) + "_tests/seed" + str(args.seed) + "/plots")
 os.system("mkdir -p " + str(args.env_name) + "_tests/seed" + str(args.seed) + "/data")
+os.system("mkdir -p " + str(args.env_name) + "_tests/seed" + str(args.seed) + "/parameters")
+os.system("mkdir -p " + str(args.env_name) + "_tests/seed" + str(args.seed) + "/adaptive_sigma")
+
+for episode in range(args.max_episodes):
+    os.system("mkdir -p " + str(args.env_name) + "_tests/seed" + str(args.seed) + "/parameters/" + "episode_" + str(episode))
+
+
 # os.system("cd " + str(args.env_name) + "_tests")
 
 
@@ -62,6 +69,21 @@ for sigma in sigmas:
 os.system("python main.py --env-name " + str(args.env_name) + " --max-episodes " + str(args.max_episodes) + " --plot-name " + str(args.env_name)
               + "_Adaptnoise" + 's' + str(args.seed) + "std" + str(sigma) + " --seed " + str(args.seed) + " --sigma-initial " + str(0.1) +
               " --use-parameter-noise" + " --sigma-adaptive")
+
+#TODO
+# 1. Choose 100 best policies according to reward seed/data/
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 os.system("cd ..")
