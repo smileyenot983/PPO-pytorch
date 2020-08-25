@@ -284,7 +284,7 @@ perturbation_timestep = 2
 #linearly decreasing sigma
 sigma_schedulefactor = 0.999
 
-adaptive_sigmas = []
+sigma_behaviour = []
 
 rewards_returned = []
 
@@ -357,12 +357,16 @@ for i_episode in range(args.max_episodes):
     if args.use_parameter_noise and args.sigma_adaptive:
         current_distance = policies_distance(memory.sample(), sigma)
         print(current_distance)
-        #saving behaviour of sigma
-        adaptive_sigmas.append(sigma)
+
         if current_distance > distance_threshold:
             sigma /= sigma_scalefactor
         else:
             sigma *= sigma_scalefactor
+
+    if args.use_parameter_noise:
+        # saving behaviour of sigma
+        sigma_behaviour.append(sigma)
+
 
     if args.use_parameter_noise and args.sigma_linear_scheduler:
         sigma *= sigma_schedulefactor
@@ -379,9 +383,10 @@ for i_episode in range(args.max_episodes):
 
 t = np.arange(len(rewards_returned))
 
-#saving data into a binary file
-with open(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/adaptive_sigma/' + 'adaptive_sigma_behaviour', 'wb') as f:
-    pickle.dump(adaptive_sigmas,f)
+if args.use_parameter_noise:
+    #saving data into a binary file
+    with open(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/sigma_behaviour/' + str(args.plot_name), 'wb') as f:
+        pickle.dump(sigma_behaviour,f)
 
 #saving data into a binary file
 with open(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/data/' + str(args.plot_name), 'wb') as f:

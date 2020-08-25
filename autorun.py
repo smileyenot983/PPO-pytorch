@@ -14,7 +14,7 @@ args = parser.parse_args()
 os.system("mkdir -p " + str(args.env_name) + "_tests/seed" + str(args.seed) + "/plots")
 os.system("mkdir -p " + str(args.env_name) + "_tests/seed" + str(args.seed) + "/data")
 os.system("mkdir -p " + str(args.env_name) + "_tests/seed" + str(args.seed) + "/parameters")
-os.system("mkdir -p " + str(args.env_name) + "_tests/seed" + str(args.seed) + "/adaptive_sigma")
+os.system("mkdir -p " + str(args.env_name) + "_tests/seed" + str(args.seed) + "/sigma_behaviour")
 
 for episode in range(args.max_episodes):
     os.system("mkdir -p " + str(args.env_name) + "_tests/seed" + str(args.seed) + "/parameters/" + "episode_" + str(episode))

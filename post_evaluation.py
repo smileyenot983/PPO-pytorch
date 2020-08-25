@@ -111,9 +111,16 @@ for seed in range(1,n_seeds+1):
 
 
 
-#i will test for 5 episodes each policy
 
-def post_evaluate(policies_dict):
+
+def post_evaluate(policies_dict,add_noise=False):
+    '''function tests n best policies for 5 episodes each
+    1. policies_dict - structure with 2 lists: path to policy parameters, reward obtained using this policy
+     add_noise parameter - if true - adds parameter noise with sigma(std) same as it was used during training
+    '''
+
+
+
     # after getting best n policies it is necessary to post evaluate all of them to choose the best one
     post_evaluation = {}
 
@@ -139,6 +146,18 @@ def post_evaluate(policies_dict):
 
         reward_sum=0
 
+        if add_noise and not 'Nonoise' in policy:
+            current_seed = policy.split('seed')[1][0]
+            current_setting = policy.split('/')[-1]
+            sigma_path = args.src + "/seed" + current_seed + "/sigma_behaviour/" + current_setting
+
+            sigma_episode = int(policy.split('episode_')[1][0])
+            with open(sigma_path,'rb') as f:
+                sigmas = pickle.load(f)
+
+            current_sigma = sigmas[sigma_episode]
+            # print(current_sigma)
+
         for i_episode in range(n_test_episodes):
 
             #seed to make equivalent initial conditions for all policies
@@ -150,9 +169,14 @@ def post_evaluate(policies_dict):
 
             for t in range(1000):
                 state = torch.FloatTensor(state)
-                action_mean,_,action_std = policy_layer(state)
 
-                # action = action.data[0].numpy()
+
+                if add_noise and not 'Nonoise' in policy:
+                    action_mean,_,action_std = policy_layer(state,sigma = current_sigma,param_noise=True)
+                else:
+                    action_mean, _, action_std = policy_layer(state)
+
+
                 action = action_mean.detach().numpy()
                 next_state,reward,done, _ = env.step(action)
 
@@ -165,100 +189,78 @@ def post_evaluate(policies_dict):
 
     return post_evaluation
 
+
+
 #best policies overall
-postevaluation_noise = post_evaluate(best_policies_paths)
+postevaluation_noise = post_evaluate(best_policies_paths,add_noise=True)
+postevaluation_noise2 = post_evaluate(best_policies_paths,add_noise=False)
 #best policies without any noise
-postevaluation_nonoise = post_evaluate(best_policies_nonoise)
+postevaluation_nonoise = post_evaluate(best_policies_nonoise,add_noise=False)
+
+
 
 #returns path to the best policy
 best_policy_noise = max(postevaluation_noise,key=lambda x:x[1])
+print('Best noisy policy with ' + best_policy_noise)
+print('Average reward achieved by best noisy policy: ' + str(postevaluation_noise[best_policy_noise]))
+
 best_policy_nonoise = max(postevaluation_nonoise,key=lambda x:x[1])
-
-print(best_policy_noise)
-print(best_policy_nonoise)
-
-
-env = gym.make(args.env)
-num_inputs = env.observation_space.shape[0]
-num_actions = env.action_space.shape[0]
-
-# #plotting results obtained with best policy with noise and without noise
-# policy_with_noise = models.PolicyLayerNorm(num_inputs,num_actions)
-# value_with_noise = models.Value(num_inputs)
-# policy_with_noise.load_state_dict(torch.load(best_policy_noise + "_policy"))
-# value_with_noise.load_state_dict(torch.load(best_policy_noise + "_value"))
-#
-#
-# policy_without_noise = models.Policy(num_inputs,num_actions)
-# value_without_noise = models.Value(num_inputs)
-# policy_without_noise.load_state_dict(torch.load(best_policy_nonoise + "_policy"))
-# value_without_noise.load_state_dict(torch.load(best_policy_nonoise + "_value"))
-#
-# #now evaluating them during 300 episodes each to plot obtained rewards
-# n_final_episodes = 300
-# def test_policy(policy_net):
-#     policy_rewards = []
-#     for i_episode in range(n_final_episodes):
-#         episode_reward=0
-#         env = gym.make(args.env)
-#         env.seed(i_episode)
-#         torch.manual_seed(i_episode)
-#
-#         state =env.reset()
-#
-#         for t in range(1000):
-#             state = torch.FloatTensor(state)
-#             action_mean, _, action_std = policy_net(state)
-#
-#
-#             action = action_mean.detach().numpy()
-#             next_state, reward, done, _ = env.step(action)
-#
-#             episode_reward += reward
-#
-#             if done:
-#                 break
-#
-#         policy_rewards.append(episode_reward)
-#
-#     return policy_rewards
+print('Policy with highest reward: ' + best_policy_nonoise)
+print('Average reward achieved by policy without noise: ' + str(postevaluation_nonoise[best_policy_nonoise]))
 
 
-# results_with_noise = test_policy(policy_with_noise)
-# results_without_noise = test_policy(policy_without_noise)
-#
-# t = np.arange(n_final_episodes)
-# plt.scatter(t,results_with_noise,label='with noise')
-# plt.scatter(t,results_without_noise,label='without noise')
-# plt.legend()
-# plt.show()
+'''Comparing average reward achieved during post evaluation with and without noise'''
+post_noise = []
+post_nonoise = []
+policies = list(postevaluation_noise.keys())
+for policy in postevaluation_noise:
+    with_noise = postevaluation_noise[policy]
+    without_noise = postevaluation_noise2[policy]
+
+    post_noise.append(with_noise)
+    post_nonoise.append(without_noise)
 
 
-
-best_seed_noise = best_policy_noise.split('/')[2]
-best_setting_noise = best_policy_noise.split('/')[5]
-
-best_seed_nonoise = best_policy_nonoise.split('/')[2]
-best_setting_nonoise = best_policy_nonoise.split('/')[5]
-
-print(os.getcwd())
-#getting paths for best results obtained with and without results
-rewards_noise = args.src +  str(best_seed_noise) + '/data/' + best_setting_noise
-rewards_nonoise = args.src + str(best_seed_nonoise) + '/data/' + best_setting_nonoise
-
-with open(rewards_noise,'rb') as f:
-    rewards_noise_list = pickle.load(f)
-
-with open(rewards_nonoise,'rb') as f:
-    rewards_nonoise_list = pickle.load(f)
-
-t = np.arange(len(rewards_noise_list))
-
-plt.plot(t,rewards_noise_list,label=best_setting_noise)
-plt.plot(t,rewards_nonoise_list,label=best_setting_nonoise)
-
-plt.xlabel('episode')
-plt.ylabel('reward')
+#plotting performance
+plt.scatter(post_noise,policies,label='post evaluation with noise')
+plt.scatter(post_nonoise,policies,label='post evaluation without noise')
 plt.legend()
 plt.show()
+
+
+
+
+'''here is plotting of evolution of 2 best policies: with noise during training and without'''
+# env = gym.make(args.env)
+# num_inputs = env.observation_space.shape[0]
+# num_actions = env.action_space.shape[0]
+#
+#
+#
+# best_seed_noise = best_policy_noise.split('/')[2]
+# best_setting_noise = best_policy_noise.split('/')[5]
+#
+# best_seed_nonoise = best_policy_nonoise.split('/')[2]
+# best_setting_nonoise = best_policy_nonoise.split('/')[5]
+#
+# print(os.getcwd())
+# #getting paths for best results obtained with and without results
+# rewards_noise = args.src +  str(best_seed_noise) + '/data/' + best_setting_noise
+# rewards_nonoise = args.src + str(best_seed_nonoise) + '/data/' + best_setting_nonoise
+#
+# with open(rewards_noise,'rb') as f:
+#     rewards_noise_list = pickle.load(f)
+#
+# with open(rewards_nonoise,'rb') as f:
+#     rewards_nonoise_list = pickle.load(f)
+#
+# t = np.arange(len(rewards_noise_list))
+#
+# plt.plot(t,rewards_noise_list,label=best_setting_noise)
+# plt.plot(t,rewards_nonoise_list,label=best_setting_nonoise)
+#
+# plt.xlabel('episode')
+# plt.ylabel('reward')
+# plt.legend()
+# plt.show()
 

@@ -167,7 +167,8 @@ class PolicyLayerNorm(nn.Module):
                 action_std = torch.exp(action_log_std)
             else:
                 x = self.layer_norm(F.tanh(self.affine1(x)))
-
+                # print("x.shape")
+                x = x.reshape(1,64)
                 x += self.parameter_noise(sigma=sigma)
                 x = self.layer_norm(F.tanh(self.affine2(x)))
                 x += self.parameter_noise(sigma=sigma)
