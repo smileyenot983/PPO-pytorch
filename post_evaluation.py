@@ -202,7 +202,12 @@ postevaluation_nonoise = post_evaluate(best_policies_nonoise,add_noise=False)
 #returns path to the best policy
 best_policy_noise = max(postevaluation_noise,key=lambda x:x[1])
 print('Best noisy policy with ' + best_policy_noise)
-print('Average reward achieved by best noisy policy: ' + str(postevaluation_noise[best_policy_noise]))
+print('Average reward achieved by best noisy policy(with noise during training and post evaluation): ' + str(postevaluation_noise[best_policy_noise]))
+
+best_policy_noise2 = max(postevaluation_noise2,key=lambda x:x[1])
+print('Best noisy policy with ' + best_policy_noise2)
+print('Average reward achieved by best noisy policy(with noise during training, but without noise during post evaluation): ' + str(postevaluation_noise2[best_policy_noise2]))
+
 
 best_policy_nonoise = max(postevaluation_nonoise,key=lambda x:x[1])
 print('Policy with highest reward: ' + best_policy_nonoise)
@@ -220,10 +225,10 @@ for policy in postevaluation_noise:
     post_noise.append(with_noise)
     post_nonoise.append(without_noise)
 
-
+t = np.arange(len(policies))
 #plotting performance
-plt.scatter(post_noise,policies,label='post evaluation with noise')
-plt.scatter(post_nonoise,policies,label='post evaluation without noise')
+plt.plot(t,post_noise,label='post evaluation with noise')
+plt.plot(t,post_nonoise,label='post evaluation without noise')
 plt.legend()
 plt.show()
 
