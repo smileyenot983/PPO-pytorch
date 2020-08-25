@@ -10,7 +10,10 @@ from torch.autograd import Variable
 import models
 
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import matplotlib.pyplot as plt
+import pybulletgym
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--src', type=str, help='Name of folder which contains results of experiments(2 folders with data and plots)')
@@ -25,6 +28,138 @@ for f in os.listdir(args.src):
         n_seeds+=1
 
 print('n seeds = ' + str(n_seeds))
+
+
+'''Here are modified policy networks, to be able to use them at post evaluation'''
+
+
+class Policy(nn.Module):
+
+    def __init__(self, num_inputs, num_outputs):
+        super(Policy, self).__init__()
+        self.affine1 = nn.Linear(num_inputs, 64)
+
+        self.affine2 = nn.Linear(64, 64)
+
+        self.action_mean = nn.Linear(64, num_outputs)
+        self.action_mean.weight.data.mul_(0.1)
+        self.action_mean.bias.data.mul_(0.0)
+        self.action_log_std = nn.Parameter(torch.zeros(1, num_outputs))
+        self.module_list_current = [self.affine1, self.affine2, self.action_mean, self.action_log_std]
+
+        self.module_list_old = [None] * len(
+            self.module_list_current)  # self.affine1_old, self.affine2_old, self.action_mean_old, self.action_log_std_old]
+
+
+
+    def forward(self, x, old=False):
+
+        if old:
+            x = F.tanh(self.module_list_old[0](x))
+            x = F.tanh(self.module_list_old[1](x))
+
+            action_mean = self.module_list_old[2](x)
+            # action_mean = action_mean.reshape(1, action_mean.shape[0])
+            action_log_std = self.module_list_old[3].expand_as(action_mean)
+            action_std = torch.exp(action_log_std)
+        else:
+            x = F.tanh(self.affine1(x))
+
+            x = F.tanh(self.affine2(x))
+
+            x = x.reshape(-1, x.shape[0])
+            action_mean = self.action_mean(x)
+
+            # action_mean = action_mean.reshape(action_mean.shape[0],-1)
+
+            action_log_std = self.action_log_std.expand_as(action_mean)
+            action_std = torch.exp(action_log_std)
+
+        return action_mean, action_log_std, action_std
+
+
+# modified policy network
+# 1. layer normalization after first 2 activations
+# 2. adding noise with a given std after layer normalizations
+class PolicyLayerNorm(nn.Module):
+    def __init__(self, num_inputs, num_outputs):
+        super(PolicyLayerNorm, self).__init__()
+        self.affine1 = nn.Linear(num_inputs, 64)
+        # normalization layer
+        self.layer_norm = nn.LayerNorm(64)
+        self.affine2 = nn.Linear(64, 64)
+
+        self.action_mean = nn.Linear(64, num_outputs)
+        self.action_mean.weight.data.mul_(0.1)
+        self.action_mean.bias.data.mul_(0.0)
+        self.action_log_std = nn.Parameter(torch.zeros(1, num_outputs))
+        self.module_list_current = [self.affine1, self.affine2, self.action_mean, self.action_log_std]
+
+        self.module_list_old = [None] * len(
+            self.module_list_current)  # self.affine1_old, self.affine2_old, self.action_mean_old, self.action_log_std_old]
+
+
+    # function which produces parameter noise
+    # normal distribution with mean=0,std should be given
+    def parameter_noise(self, sigma):
+        noise = torch.normal(mean=0, std=sigma, size=(1, 64))
+        return noise
+
+    def forward(self, x, sigma=0.0, old=False, param_noise=False):
+        # print('with noise')
+        if param_noise:
+            if old:
+                # normalization added
+                x = self.layer_norm(F.tanh(self.module_list_old[0](x)))
+                x = x.reshape(-1, x.shape[0])
+                # parameter noise
+                x += self.parameter_noise(sigma=sigma)
+                # normalization added
+                x = self.layer_norm(F.tanh(self.module_list_old[1](x)))
+                # parameter nosie
+                x += self.parameter_noise(sigma=sigma)
+                action_mean = self.module_list_old[2](x)
+                action_log_std = self.module_list_old[3].expand_as(action_mean)
+                action_std = torch.exp(action_log_std)
+            else:
+                x = self.layer_norm(F.tanh(self.affine1(x)))
+
+                x = x.reshape(-1, x.shape[0])
+                x += self.parameter_noise(sigma=sigma)
+                x = self.layer_norm(F.tanh(self.affine2(x)))
+                x += self.parameter_noise(sigma=sigma)
+                action_mean = self.action_mean(x)
+                action_log_std = self.action_log_std.expand_as(action_mean)
+                action_std = torch.exp(action_log_std)
+
+            return action_mean, action_log_std, action_std
+        else:
+            if old:
+                # normalization added
+                x = F.tanh(self.module_list_old[0](x))
+                x = x.reshape(-1, x.shape[0])
+                # parameter noise
+                # x += self.parameter_noise(sigma=sigma)
+                # normalization added
+                x = F.tanh(self.module_list_old[1](x))
+                # parameter nosie
+                # x += self.parameter_noise(sigma=sigma)
+                action_mean = self.module_list_old[2](x)
+                action_log_std = self.module_list_old[3].expand_as(action_mean)
+                action_std = torch.exp(action_log_std)
+            else:
+                x = self.layer_norm(F.tanh(self.affine1(x)))
+                x = x.reshape(-1, x.shape[0])
+                x = self.layer_norm(F.tanh(self.affine2(x)))
+
+                action_mean = self.action_mean(x)
+                # action_mean = action_mean.reshape(1,action_mean.shape[0])
+
+                action_log_std = self.action_log_std.expand_as(action_mean)
+                action_std = torch.exp(action_log_std)
+
+            return action_mean, action_log_std, action_std
+
 
 #class for storing paths to n best policies
 class sorted_list:
@@ -135,9 +270,9 @@ def post_evaluate(policies_dict,add_noise=False):
 
         # loading pretrained networks
         if 'Nonoise' in policy:
-            policy_layer = models.Policy(num_inputs,num_actions)
+            policy_layer = Policy(num_inputs,num_actions)
         else:
-            policy_layer = models.PolicyLayerNorm(num_inputs, num_actions)
+            policy_layer = PolicyLayerNorm(num_inputs, num_actions)
         value_layer = models.Value(num_inputs)
 
         policy_layer.load_state_dict(torch.load(policy_path))
@@ -178,6 +313,7 @@ def post_evaluate(policies_dict,add_noise=False):
 
 
                 action = action_mean.detach().numpy()
+                action = action[0,:]
                 next_state,reward,done, _ = env.step(action)
 
                 reward_sum+=reward

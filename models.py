@@ -101,7 +101,7 @@ class Policy(nn.Module):
             x = F.tanh(self.module_list_old[1](x))
 
             action_mean = self.module_list_old[2](x)
-            action_mean = action_mean.reshape(1, action_mean.shape[0])
+            # action_mean = action_mean.reshape(1, action_mean.shape[0])
             action_log_std = self.module_list_old[3].expand_as(action_mean)
             action_std = torch.exp(action_log_std)
         else:
@@ -111,7 +111,8 @@ class Policy(nn.Module):
 
 
             action_mean = self.action_mean(x)
-            action_mean = action_mean.reshape(1, action_mean.shape[0])
+            # print(action_mean.shape)
+            # action_mean = action_mean.reshape(1, action_mean.shape[1])
             action_log_std = self.action_log_std.expand_as(action_mean)
             action_std = torch.exp(action_log_std)
 
@@ -167,8 +168,9 @@ class PolicyLayerNorm(nn.Module):
                 action_std = torch.exp(action_log_std)
             else:
                 x = self.layer_norm(F.tanh(self.affine1(x)))
-                # print("x.shape")
-                x = x.reshape(1,64)
+                # print(x.shape)
+
+                # x = x.reshape(1,64)
                 x += self.parameter_noise(sigma=sigma)
                 x = self.layer_norm(F.tanh(self.affine2(x)))
                 x += self.parameter_noise(sigma=sigma)
@@ -196,7 +198,7 @@ class PolicyLayerNorm(nn.Module):
                 x = self.layer_norm(F.tanh(self.affine2(x)))
 
                 action_mean = self.action_mean(x)
-                action_mean = action_mean.reshape(1,action_mean.shape[0])
+                # action_mean = action_mean.reshape(1,action_mean.shape[0])
 
                 action_log_std = self.action_log_std.expand_as(action_mean)
                 action_std = torch.exp(action_log_std)
