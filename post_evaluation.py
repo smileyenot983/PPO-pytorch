@@ -220,7 +220,8 @@ class sorted_list:
 best_policies_paths = sorted_list(100)
 best_policies_nonoise = sorted_list(100)
 #searching for n best policies
-for seed in range(1,n_seeds+1):
+# for seed in range(1,n_seeds+1):
+for seed in range(11,16):
     seed_src = args.src + '/seed' + str(seed)
     data_src = seed_src + '/data'
     parameter_src = seed_src + '/parameters/'
@@ -282,8 +283,13 @@ def post_evaluate(policies_dict,add_noise=False):
         reward_sum=0
 
         if add_noise and not 'Nonoise' in policy:
-            current_seed = policy.split('seed')[1][0]
+
+            right_part = policy.split('seed')[1]
+            current_seed = right_part.split('/')[0]
+
+
             current_setting = policy.split('/')[-1]
+
             sigma_path = args.src + "/seed" + current_seed + "/sigma_behaviour/" + current_setting
 
             sigma_episode = int(policy.split('episode_')[1][0])
