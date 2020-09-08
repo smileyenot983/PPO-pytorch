@@ -14,6 +14,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import pybulletgym
+from running_state import ZFilter
+
+
+
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--src', type=str, help='Name of folder which contains results of experiments(2 folders with data and plots)')
@@ -217,11 +222,11 @@ class sorted_list:
 
 
 
-best_policies_paths = sorted_list(100)
-best_policies_nonoise = sorted_list(100)
+best_policies_paths = sorted_list(10)
+best_policies_nonoise = sorted_list(10)
 #searching for n best policies
-# for seed in range(1,n_seeds+1):
-for seed in range(11,16):
+for seed in range(1,n_seeds+1):
+# for seed in rang  e(11,16):
     seed_src = args.src + '/seed' + str(seed)
     data_src = seed_src + '/data'
     parameter_src = seed_src + '/parameters/'
@@ -247,15 +252,13 @@ for seed in range(11,16):
 
 
 
-
+# print(best_policies_paths.paths)
 
 def post_evaluate(policies_dict,add_noise=False):
     '''function tests n best policies for 5 episodes each
     1. policies_dict - structure with 2 lists: path to policy parameters, reward obtained using this policy
      add_noise parameter - if true - adds parameter noise with sigma(std) same as it was used during training
     '''
-
-
 
     # after getting best n policies it is necessary to post evaluate all of them to choose the best one
     post_evaluation = {}
@@ -269,24 +272,26 @@ def post_evaluate(policies_dict,add_noise=False):
         num_inputs = env.observation_space.shape[0]
         num_actions = env.action_space.shape[0]
 
+        running_state = ZFilter((num_inputs,), clip=5)
+
         # loading pretrained networks
         if 'Nonoise' in policy:
             policy_layer = Policy(num_inputs,num_actions)
         else:
             policy_layer = PolicyLayerNorm(num_inputs, num_actions)
+
         value_layer = models.Value(num_inputs)
 
         policy_layer.load_state_dict(torch.load(policy_path))
         value_layer.load_state_dict(torch.load(value_path))
 
 
-        reward_sum=0
+
 
         if add_noise and not 'Nonoise' in policy:
 
             right_part = policy.split('seed')[1]
             current_seed = right_part.split('/')[0]
-
 
             current_setting = policy.split('/')[-1]
 
@@ -299,42 +304,70 @@ def post_evaluate(policies_dict,add_noise=False):
             current_sigma = sigmas[sigma_episode]
             # print(current_sigma)
 
+        rewards_batch = []
+
         for i_episode in range(n_test_episodes):
 
             #seed to make equivalent initial conditions for all policies
             env.seed(i_episode)
             torch.manual_seed(i_episode)
 
+            # env.seed(1)
+            # torch.manual_seed(1)
+
             state = env.reset()
+            state = running_state(state)
 
-
+            reward_sum = 0
             for t in range(1000):
                 state = torch.FloatTensor(state)
-
 
                 if add_noise and not 'Nonoise' in policy:
                     action_mean,_,action_std = policy_layer(state,sigma = current_sigma,param_noise=True)
                 else:
                     action_mean, _, action_std = policy_layer(state)
 
+                action = torch.normal(action_mean,action_std)
 
-                action = action_mean.detach().numpy()
-                action = action[0,:]
+
+                # action = action.detach().numpy()
+                action = action.data[0].numpy()
+                # print(action)
+                # action = action[0,:]
+
                 next_state,reward,done, _ = env.step(action)
+
+                # env.render()
 
                 reward_sum+=reward
 
                 if done:
                     break
 
-        post_evaluation[policy] = reward_sum/n_test_episodes
+                state = running_state(next_state)
+
+            rewards_batch.append(reward_sum)
+
+        # print(policy)
+        # print(rewards_batch)
+        post_evaluation[policy] = sum(rewards_batch)/(len(rewards_batch))
+
 
     return post_evaluation
 
 
 
+
+# print(best_policies_paths.paths)
+print(best_policies_paths.rewards)
+
+
+
 #best policies overall
 postevaluation_noise = post_evaluate(best_policies_paths,add_noise=True)
+
+print(postevaluation_noise.values())
+
 postevaluation_noise2 = post_evaluate(best_policies_paths,add_noise=False)
 #best policies without any noise
 postevaluation_nonoise = post_evaluate(best_policies_nonoise,add_noise=False)

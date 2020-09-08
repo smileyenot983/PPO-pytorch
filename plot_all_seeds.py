@@ -3,12 +3,24 @@ import os
 import pickle
 import matplotlib.pyplot as plt
 import argparse
-from tensorboardX import SummaryWriter
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--src', type=str, help='Name of folder which contains results of experiments(2 folders with data and plots)')
 parser.add_argument('--tensorboard', action='store_true')
 
+
+
+
+
+
+
+
+
 args = parser.parse_args()
+
+if args.tensorboard:
+    from tensorboardX import SummaryWriter
+
 
 # src = './CartPoleSwingUp-v3_tests'
 
@@ -34,8 +46,8 @@ def load_data(data_src,data_dict,seed):
     for setting in settings:
 
 
-        if 's' + str(seed) in setting:
-            new_setting = setting.replace('s' + str(seed),'')
+        # if 's' + str(seed) in setting:
+        new_setting = setting.replace('s' + str(seed),'')
 
         # print(setting)
         # print(new_setting)
