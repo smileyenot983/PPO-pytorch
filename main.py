@@ -298,6 +298,10 @@ for i_episode in range(args.max_episodes):
     reward_batch = 0
     num_episodes = 0
 
+    if args.use_parameter_noise:
+        # saving behaviour of sigma
+        sigma_behaviour.append(sigma)
+
     #default batch size = 5000
     while num_steps < args.batch_size:
 
@@ -364,9 +368,7 @@ for i_episode in range(args.max_episodes):
         else:
             sigma *= sigma_scalefactor
 
-    if args.use_parameter_noise:
-        # saving behaviour of sigma
-        sigma_behaviour.append(sigma)
+
 
 
     if args.use_parameter_noise and args.sigma_linear_scheduler:
