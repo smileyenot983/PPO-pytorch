@@ -286,8 +286,6 @@ def post_evaluate(policies_dict,add_noise=False):
         value_layer.load_state_dict(torch.load(value_path))
 
 
-
-
         if add_noise and not 'Nonoise' in policy:
 
             right_part = policy.split('seed')[1]
@@ -332,19 +330,17 @@ def post_evaluate(policies_dict,add_noise=False):
 
                 # action = action.detach().numpy()
                 action = action.data[0].numpy()
-                # print(action)
-                # action = action[0,:]
 
                 next_state,reward,done, _ = env.step(action)
 
-                # env.render()
-
                 reward_sum+=reward
+
+                next_state = running_state(next_state)
 
                 if done:
                     break
 
-                state = running_state(next_state)
+                state = next_state
 
             rewards_batch.append(reward_sum)
 
@@ -366,6 +362,7 @@ print(best_policies_paths.rewards)
 #best policies overall
 postevaluation_noise = post_evaluate(best_policies_paths,add_noise=True)
 
+print('Post evaluation with noise for 10 best policies(rewards):')
 print(postevaluation_noise.values())
 
 postevaluation_noise2 = post_evaluate(best_policies_paths,add_noise=False)
