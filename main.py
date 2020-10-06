@@ -74,6 +74,13 @@ parser.add_argument('--sigma-initial',default=0.1,help='initial value for noise'
 parser.add_argument('--sigma-linear-scheduler', action='store_true')
 parser.add_argument('--sigma-exponential-scheduler', action='store_true')
 
+parser.add_argument('--post-evaluation-interval', type=int, default=5, metavar='N',
+                    help='interval between postevaluations')
+
+parser.add_argument('--parameter-save-interval', type=int, default=10, metavar='N',
+                    help='interval between saving parameters of networks')
+
+
 # parser.add_argument('--plot-folder', type=str, default='./plots', help='folder for storing plots')
 
 
@@ -102,15 +109,25 @@ else:
     opt_policy = optim.Adam(policy_net.parameters(), lr=0.001)
     opt_value = optim.Adam(value_net.parameters(), lr=0.001)
 
-def select_action(state,sigma):
-    state = torch.from_numpy(state).unsqueeze(0)
-    if args.use_parameter_noise:
-        action_mean, _, action_std = policy_net(Variable(state),sigma,param_noise=True)
-    else:
+# def select_action(state,sigma):
+#     state = torch.from_numpy(state).unsqueeze(0)
+#     if args.use_parameter_noise:
+#         action_mean, _, action_std = policy_net(Variable(state),sigma,param_noise=True)
+#     else:
+#         action_mean, _, action_std = policy_net(Variable(state))
+#     action = torch.normal(action_mean, action_std)
+#     return action
 
-        action_mean, _, action_std = policy_net(Variable(state))
+def select_action(policy,state,sigma=1e-5,add_noise=False):
+    state = torch.from_numpy(state).unsqueeze(0)
+    state = state.double()
+    if args.use_parameter_noise and add_noise:
+        action_mean, _, action_std = policy(Variable(state),sigma)
+    else:
+        action_mean, _, action_std = policy(Variable(state))
     action = torch.normal(action_mean, action_std)
     return action
+
 
 def select_action_actor_critic(state):
     state = torch.from_numpy(state).unsqueeze(0)
@@ -252,6 +269,56 @@ def update_params(batch,sigma):
     opt_policy.step()
 
 
+def post_evaluate(models_path, sigma, n_post_episodes=5,add_noise=False):
+    # print('----------------Post evaluation----------------')
+
+    policy_path = models_path + "_policy"
+    value_path = models_path + "_value"
+
+    if args.use_parameter_noise:
+        policy_post = PolicyLayerNorm(num_inputs, num_actions)
+        value_post = Value(num_inputs)
+
+    else:
+        policy_post = Policy(num_inputs, num_actions)
+        value_post = Value(num_inputs)
+
+    # print('------------------')
+    value_post.load_state_dict(torch.load(value_path))
+    policy_post.load_state_dict(torch.load(policy_path))
+
+
+    reward_post = 0
+
+    for i in range(n_post_episodes):
+        state = env.reset()
+        # state = running_state(state)
+        for t in range(1000):
+
+            if args.use_parameter_noise and add_noise:
+                action = select_action(policy_post, state, sigma,add_noise=True)
+
+            else:
+                action = select_action(policy_post, state)
+            action = action.data[0].numpy()
+
+            next_state, reward, done, _ = env.step(action)
+
+            reward_post += reward
+
+            # next_state = running_state(next_state)
+
+            if done:
+                break
+
+            # state = running_state(next_state)
+            state = next_state
+
+    print('___Post evaluation reward___')
+    print(reward_post / n_post_episodes)
+
+    return reward_post / n_post_episodes
+
 #calculating distance between 2 policies
 def policies_distance(batch,sigma):
 
@@ -289,6 +356,12 @@ sigma_behaviour = []
 
 rewards_returned = []
 
+#TODO:
+# 1. add post evaluation after every n_th episode and save obtained reward in binary
+
+post_evaluation_noise1 = [] #---with noise during post evaluation
+post_evaluation_noise2 = [] #---without noise during post evaluation
+post_evaluation_nonoise = [] #---without noise during training
 
 for i_episode in range(args.max_episodes):
 # for i_episode in count(1):
@@ -306,19 +379,20 @@ for i_episode in range(args.max_episodes):
     while num_steps < args.batch_size:
 
         state = env.reset()
-        state = running_state(state)
+        # state = running_state(state)
 
         reward_sum = 0
         for t in range(1000): # Don't infinite loop while learning
             if args.use_joint_pol_val:
                 action = select_action_actor_critic(state)
             else:
-                action = select_action(state,sigma)
+                # action = select_action(state,sigma)
+                action = select_action(policy_net,state,sigma,add_noise=True)
             action = action.data[0].numpy()
             next_state, reward, done, _ = env.step(action)
             reward_sum += reward
 
-            next_state = running_state(next_state)
+            # next_state = running_state(next_state)
 
             mask = 1
             if done:
@@ -343,11 +417,28 @@ for i_episode in range(args.max_episodes):
     reward_batch /= num_episodes
     batch = memory.sample()
 
+    models_path = str(args.env_name) + "_tests" + "/seed" + str(args.seed) + "/parameters/episode_" + str(
+        i_episode) + "/" + str(args.plot_name)
+    torch.save(policy_net.state_dict(), models_path + "_policy")
+    torch.save(value_net.state_dict(), models_path + "_value")
 
-    #saving current model parameters(weights)
-    models_path = str(args.env_name) + "_tests" + "/seed" + str(args.seed) + "/parameters/episode_" + str(i_episode) + "/"  + str(args.plot_name)
-    torch.save(policy_net.state_dict(),models_path + "_policy")
-    torch.save(value_net.state_dict(),models_path + "_value")
+
+
+    if i_episode % args.parameter_save_interval==0:
+
+        if args.use_parameter_noise:
+
+            post_evaluation_noise1.append(post_evaluate(models_path, sigma, add_noise=True))
+            post_evaluation_noise2.append(post_evaluate(models_path, sigma, add_noise=False))
+
+        else:
+            post_evaluation_nonoise.append(post_evaluate(models_path, sigma, add_noise=False))
+
+    if i_episode % args.log_interval == 0:
+        print('Episode {}\tLast reward: {} \t Average reward {:.2f} \t Sigma {}'.format(
+            i_episode, reward_sum, reward_batch, sigma))
+
+
 
 
     if args.use_joint_pol_val:
@@ -361,15 +452,12 @@ for i_episode in range(args.max_episodes):
     #2. if distance higher than threshold -> reduce std, if less -> increase
     if args.use_parameter_noise and args.sigma_adaptive:
         current_distance = policies_distance(memory.sample(), sigma)
-        print(current_distance)
+        # print(current_distance)
 
         if current_distance > distance_threshold:
             sigma /= sigma_scalefactor
         else:
             sigma *= sigma_scalefactor
-
-
-
 
     if args.use_parameter_noise and args.sigma_linear_scheduler:
         sigma *= sigma_schedulefactor
@@ -378,18 +466,36 @@ for i_episode in range(args.max_episodes):
         sigma = sigma ** sigma_schedulefactor
 
 
-
-    if i_episode % args.log_interval == 0:
-        print('Episode {}\tLast reward: {} \t Average reward {:.2f} \t Sigma {}'.format(
-            i_episode, reward_sum, reward_batch, sigma))
-
-
 t = np.arange(len(rewards_returned))
 
 if args.use_parameter_noise:
     #saving data into a binary file
     with open(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/sigma_behaviour/' + str(args.plot_name), 'wb') as f:
         pickle.dump(sigma_behaviour,f)
+
+    # with open(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/post_evaluation/' + 'noisy_policy_noise_post', 'wb') as f:
+    #     pickle.dump(post_evaluation_noise1,f)
+    #
+    # with open(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/post_evaluation/' + 'noisy_policy_nonoise_post', 'wb') as f:
+    #     pickle.dump(post_evaluation_noise2,f)
+
+
+    # print('______________________________________')
+    # setting_name = args.plot_name.split("s" + str(args.seed))
+    # print(setting_name)
+    # print('______________________________________')
+    with open(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/post_evaluation/' + str(args.plot_name) + '_noise_post', 'wb') as f:
+        pickle.dump(post_evaluation_noise1,f)
+
+    with open(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/post_evaluation/' + str(args.plot_name) +'_nonoise_post', 'wb') as f:
+        pickle.dump(post_evaluation_noise2,f)
+
+else:
+    with open(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/post_evaluation/' + str(args.plot_name), 'wb') as f:
+        pickle.dump(post_evaluation_nonoise,f)
+
+
+
 
 #saving data into a binary file
 with open(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/data/' + str(args.plot_name), 'wb') as f:
@@ -402,3 +508,7 @@ with open(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/data/' + 
 plt.scatter(t,rewards_returned)
 plt.ylabel('Rewards')
 plt.savefig(str(args.env_name) + "_tests" + '/seed' + str(args.seed) + '/plots/' + str(args.plot_name) + '.png')
+
+
+
+

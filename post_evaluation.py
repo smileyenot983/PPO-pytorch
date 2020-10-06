@@ -98,6 +98,7 @@ class PolicyLayerNorm(nn.Module):
         self.action_mean.weight.data.mul_(0.1)
         self.action_mean.bias.data.mul_(0.0)
         self.action_log_std = nn.Parameter(torch.zeros(1, num_outputs))
+        # self.action_log_std = nn.Parameter(torch.zeros(num_outputs))
         self.module_list_current = [self.affine1, self.affine2, self.action_mean, self.action_log_std]
 
         self.module_list_old = [None] * len(
@@ -107,8 +108,8 @@ class PolicyLayerNorm(nn.Module):
     # function which produces parameter noise
     # normal distribution with mean=0,std should be given
     def parameter_noise(self, sigma):
-        noise = torch.normal(mean=0, std=sigma, size=(1, 64))
-        return noise
+        noise = torch.normal(mean=0, std=sigma, size=(64,1))
+        return noise[:,0]
 
     def forward(self, x, sigma=0.0, old=False, param_noise=False):
         # print('with noise')
@@ -116,7 +117,9 @@ class PolicyLayerNorm(nn.Module):
             if old:
                 # normalization added
                 x = self.layer_norm(F.tanh(self.module_list_old[0](x)))
+
                 x = x.reshape(-1, x.shape[0])
+
                 # parameter noise
                 x += self.parameter_noise(sigma=sigma)
                 # normalization added
@@ -129,12 +132,15 @@ class PolicyLayerNorm(nn.Module):
             else:
                 x = self.layer_norm(F.tanh(self.affine1(x)))
 
-                x = x.reshape(-1, x.shape[0])
                 x += self.parameter_noise(sigma=sigma)
                 x = self.layer_norm(F.tanh(self.affine2(x)))
                 x += self.parameter_noise(sigma=sigma)
                 action_mean = self.action_mean(x)
+
+                action_mean = action_mean.reshape((1,action_mean.shape[0]))
+
                 action_log_std = self.action_log_std.expand_as(action_mean)
+                # action_log_std = self.action_log_std.resize(action_mean.shape)
                 action_std = torch.exp(action_log_std)
 
             return action_mean, action_log_std, action_std
@@ -153,6 +159,7 @@ class PolicyLayerNorm(nn.Module):
                 action_log_std = self.module_list_old[3].expand_as(action_mean)
                 action_std = torch.exp(action_log_std)
             else:
+
                 x = self.layer_norm(F.tanh(self.affine1(x)))
                 x = x.reshape(-1, x.shape[0])
                 x = self.layer_norm(F.tanh(self.affine2(x)))
@@ -164,6 +171,16 @@ class PolicyLayerNorm(nn.Module):
                 action_std = torch.exp(action_log_std)
 
             return action_mean, action_log_std, action_std
+
+def select_action(policy,state,sigma=0.0,noise=True):
+    state = torch.FloatTensor(state)
+    if noise:
+        action_mean, _, action_std = policy(Variable(state),sigma,param_noise=True)
+    else:
+        action_mean, _, action_std = policy(Variable(state))
+
+    action = torch.normal(action_mean, action_std)
+    return action
 
 
 #class for storing paths to n best policies
@@ -208,8 +225,6 @@ class sorted_list:
                 updated_rewards[i] = self.rewards[sorted_position]
                 updated_paths[i] = self.paths[sorted_position]
 
-
-
             self.rewards = updated_rewards[::-1]
             self.paths = updated_paths[::-1]
 
@@ -222,8 +237,10 @@ class sorted_list:
 
 
 
-best_policies_paths = sorted_list(10)
-best_policies_nonoise = sorted_list(10)
+n_policies_evaluated = 10
+
+best_policies_paths = sorted_list(n_policies_evaluated)
+best_policies_nonoise = sorted_list(n_policies_evaluated)
 #searching for n best policies
 for seed in range(1,n_seeds+1):
 # for seed in rang  e(11,16):
@@ -250,11 +267,7 @@ for seed in range(1,n_seeds+1):
                 best_policies_nonoise.add_path(policy_path,episode_reward)
 
 
-
-
-# print(best_policies_paths.paths)
-
-def post_evaluate(policies_dict,add_noise=False):
+def post_evaluate(policies_dict,add_noise_post=False,n_test_episodes=5):
     '''function tests n best policies for 5 episodes each
     1. policies_dict - structure with 2 lists: path to policy parameters, reward obtained using this policy
      add_noise parameter - if true - adds parameter noise with sigma(std) same as it was used during training
@@ -263,7 +276,7 @@ def post_evaluate(policies_dict,add_noise=False):
     # after getting best n policies it is necessary to post evaluate all of them to choose the best one
     post_evaluation = {}
 
-    n_test_episodes = 5
+    # n_test_episodes = 5
     for policy in policies_dict.paths:
         value_path = policy + "_value"
         policy_path = policy + "_policy"
@@ -271,8 +284,6 @@ def post_evaluate(policies_dict,add_noise=False):
         env = gym.make(args.env)
         num_inputs = env.observation_space.shape[0]
         num_actions = env.action_space.shape[0]
-
-        running_state = ZFilter((num_inputs,), clip=5)
 
         # loading pretrained networks
         if 'Nonoise' in policy:
@@ -286,7 +297,7 @@ def post_evaluate(policies_dict,add_noise=False):
         value_layer.load_state_dict(torch.load(value_path))
 
 
-        if add_noise and not 'Nonoise' in policy:
+        if add_noise_post and not 'Nonoise' in policy:
 
             right_part = policy.split('seed')[1]
             current_seed = right_part.split('/')[0]
@@ -300,7 +311,6 @@ def post_evaluate(policies_dict,add_noise=False):
                 sigmas = pickle.load(f)
 
             current_sigma = sigmas[sigma_episode]
-            # print(current_sigma)
 
         rewards_batch = []
 
@@ -310,32 +320,26 @@ def post_evaluate(policies_dict,add_noise=False):
             env.seed(i_episode)
             torch.manual_seed(i_episode)
 
-            # env.seed(1)
-            # torch.manual_seed(1)
-
             state = env.reset()
-            state = running_state(state)
 
             reward_sum = 0
             for t in range(1000):
                 state = torch.FloatTensor(state)
 
-                if add_noise and not 'Nonoise' in policy:
-                    action_mean,_,action_std = policy_layer(state,sigma = current_sigma,param_noise=True)
+                if add_noise_post and not 'Nonoise' in policy:
+                    action = select_action(policy_layer,state,current_sigma,noise=True)
+                elif not add_noise_post and not 'Nonoise' in policy:
+                    action = select_action(policy_layer,state,noise=False)
                 else:
-                    action_mean, _, action_std = policy_layer(state)
+                    action = select_action(policy_layer,state,noise=False)
 
-                action = torch.normal(action_mean,action_std)
-
-
-                # action = action.detach().numpy()
                 action = action.data[0].numpy()
 
                 next_state,reward,done, _ = env.step(action)
 
                 reward_sum+=reward
 
-                next_state = running_state(next_state)
+                # next_state = running_state(next_state)
 
                 if done:
                     break
@@ -344,46 +348,48 @@ def post_evaluate(policies_dict,add_noise=False):
 
             rewards_batch.append(reward_sum)
 
-        # print(policy)
-        # print(rewards_batch)
         post_evaluation[policy] = sum(rewards_batch)/(len(rewards_batch))
 
 
     return post_evaluation
 
 
+postevaluation_noise = post_evaluate(best_policies_paths,add_noise_post=True)
+
+postevaluation_noise2 = post_evaluate(best_policies_paths,add_noise_post=False)
+
+postevaluation_nonoise = post_evaluate(best_policies_nonoise,add_noise_post=False)
 
 
-# print(best_policies_paths.paths)
+print('Rewards, obtained by 10 best policies during training:')
 print(best_policies_paths.rewards)
 
+print('__________Post evaluation results__________________________________________')
 
-
-#best policies overall
-postevaluation_noise = post_evaluate(best_policies_paths,add_noise=True)
-
-print('Post evaluation with noise for 10 best policies(rewards):')
+print('Post evaluation with noise for 10 best policies(with noise during training):')
 print(postevaluation_noise.values())
 
-postevaluation_noise2 = post_evaluate(best_policies_paths,add_noise=False)
-#best policies without any noise
-postevaluation_nonoise = post_evaluate(best_policies_nonoise,add_noise=False)
+print('Post evaluation without noise for 10 best policies(with noise during training):')
+print(postevaluation_noise2.values())
 
+print('Post evaluation(without noise during training)')
+print(postevaluation_nonoise.values())
 
+print('____________________________________________________________________________')
 
-#returns path to the best policy
-best_policy_noise = max(postevaluation_noise,key=lambda x:x[1])
-print('Best noisy policy with ' + best_policy_noise)
-print('Average reward achieved by best noisy policy(with noise during training and post evaluation): ' + str(postevaluation_noise[best_policy_noise]))
-
-best_policy_noise2 = max(postevaluation_noise2,key=lambda x:x[1])
-print('Best noisy policy with ' + best_policy_noise2)
-print('Average reward achieved by best noisy policy(with noise during training, but without noise during post evaluation): ' + str(postevaluation_noise2[best_policy_noise2]))
-
-
-best_policy_nonoise = max(postevaluation_nonoise,key=lambda x:x[1])
-print('Policy with highest reward: ' + best_policy_nonoise)
-print('Average reward achieved by policy without noise: ' + str(postevaluation_nonoise[best_policy_nonoise]))
+# #returns path to the best policy
+# best_policy_noise = max(postevaluation_noise,key=lambda x:x[1])
+# print('Best noisy policy with ' + best_policy_noise)
+# print('Average reward achieved by best noisy policy(with noise during training and post evaluation): ' + str(postevaluation_noise[best_policy_noise]))
+#
+# best_policy_noise2 = max(postevaluation_noise2,key=lambda x:x[1])
+# print('Best noisy policy with ' + best_policy_noise2)
+# print('Average reward achieved by best noisy policy(with noise during training, but without noise during post evaluation): ' + str(postevaluation_noise2[best_policy_noise2]))
+#
+#
+# best_policy_nonoise = max(postevaluation_nonoise,key=lambda x:x[1])
+# print('Policy with highest reward: ' + best_policy_nonoise)
+# print('Average reward achieved by policy without noise: ' + str(postevaluation_nonoise[best_policy_nonoise]))
 
 
 '''Comparing average reward achieved during post evaluation with and without noise'''

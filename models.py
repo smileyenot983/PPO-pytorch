@@ -159,7 +159,7 @@ class PolicyLayerNorm(nn.Module):
                 x = self.layer_norm(F.tanh(self.module_list_old[0](x)))
                 # parameter noise
                 x += self.parameter_noise(sigma=sigma)
-                # normalization added
+                # normalization addedk
                 x = self.layer_norm(F.tanh(self.module_list_old[1](x)))
                 # parameter nosie
                 x += self.parameter_noise(sigma=sigma)
