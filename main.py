@@ -292,6 +292,12 @@ def post_evaluate(models_path, sigma, n_post_episodes=5,add_noise=False):
 
     for i in range(n_post_episodes):
         state = env.reset()
+
+        ##seeding
+        # env.seed(i)
+        # torch.manual_seed(i)
+
+
         # state = running_state(state)
         for t in range(1000):
 

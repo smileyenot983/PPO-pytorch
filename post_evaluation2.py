@@ -39,8 +39,8 @@ print('n seeds = ' + str(n_seeds))
 #it is assumed that every seed was run with same settings(same types of noise and same initial sigmas)
 first_folder = os.listdir(args.src)[0]
 all_settings = os.listdir(args.src + '/' +first_folder + '/post_evaluation')
-
-
+# print(first_folder)
+# print(all_settings)
 
 post_noise_policies = {}
 post_nonoise_policies = {}
@@ -60,26 +60,55 @@ for seed in range(1,n_seeds+1):
             post_noise_policies[setting] = setting_results
 
 
+#here are
 post_noise_sorted = sorted(post_noise_policies,key=lambda x:x[1])
 post_nonoise_sorted = sorted(post_nonoise_policies,key=lambda x:x[1])
 
-best_noise = post_noise_sorted[-1]
-best_nonoise = post_nonoise_sorted[-1]
+# print(len(post_nonoise_policies))
 
-print('______________________best noise__________________-')
-print(best_noise)
-print('______________________best without noise__________________-')
-print(best_nonoise)
 
-t1 = np.arange(len(post_noise_policies[best_noise]))
-rewards_noise = post_noise_policies[best_noise]
 
-t2 = np.arange(len(post_nonoise_policies[best_nonoise]))
-rewards_nonoise = post_nonoise_policies[best_nonoise]
 
-print(rewards_noise)
+'''statistical test'''
+from scipy import stats
 
-plt.plot(t1,rewards_noise, label=best_noise)
-plt.plot(t2,rewards_nonoise, label=best_nonoise)
-plt.legend()
-plt.show()
+#number of best policies to compare
+n_policies = 5
+#here is Mann Whitney test which compares n best policies with and without noise
+for i in range(n_policies):
+    #rewards with parameter noise
+    with_noise = post_noise_policies[post_noise_sorted[i]]
+
+    without_noise = post_nonoise_policies[post_nonoise_sorted[i]]
+
+    # Mann-WHitney U test:
+    stat, p = stats.mannwhitneyu(with_noise, without_noise)
+
+    print("p_value")
+    print(p)
+    # print(stat)
+
+
+# best_noise = post_noise_sorted[-1:-5]
+#
+# best_nonoise = post_nonoise_sorted[-1:-5]
+
+
+# print('______________________best noise__________________-')
+# print(best_noise)
+# print('______________________best without noise__________________-')
+# print(best_nonoise)
+
+##plotting 2 best policies
+# t1 = np.arange(len(post_noise_policies[best_noise]))
+# rewards_noise = post_noise_policies[best_noise]
+#
+# t2 = np.arange(len(post_nonoise_policies[best_nonoise]))
+# rewards_nonoise = post_nonoise_policies[best_nonoise]
+#
+# print(rewards_noise)
+#
+# plt.plot(t1,rewards_noise, label=best_noise)
+# plt.plot(t2,rewards_nonoise, label=best_nonoise)
+# plt.legend()
+# plt.show()

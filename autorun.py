@@ -21,7 +21,6 @@ os.system("mkdir -p " + str(args.env_name) + "_tests/seed" + str(args.seed) + "/
 for episode in range(args.max_episodes):
     os.system("mkdir -p " + str(args.env_name) + "_tests/seed" + str(args.seed) + "/parameters/" + "episode_" + str(episode))
 
-
 # os.system("cd " + str(args.env_name) + "_tests")
 
 #testing 3 cases
