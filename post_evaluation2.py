@@ -75,18 +75,27 @@ from scipy import stats
 #number of best policies to compare
 n_policies = 5
 #here is Mann Whitney test which compares n best policies with and without noise
+
+noise_rewards_list = []
+nonoise_rewards_list = []
+
 for i in range(n_policies):
     #rewards with parameter noise
     with_noise = post_noise_policies[post_noise_sorted[i]]
 
     without_noise = post_nonoise_policies[post_nonoise_sorted[i]]
 
-    # Mann-WHitney U test:
-    stat, p = stats.mannwhitneyu(with_noise, without_noise)
+    noise_rewards_list.append(with_noise)
+    nonoise_rewards_list.append(with_noise)
 
-    print("p_value")
-    print(p)
-    # print(stat)
+
+
+# Mann-WHitney U test:
+stat, p = stats.mannwhitneyu(noise_rewards_list, nonoise_rewards_list)
+
+print("p_value")
+print(p)
+print(stat)
 
 
 # best_noise = post_noise_sorted[-1:-5]
