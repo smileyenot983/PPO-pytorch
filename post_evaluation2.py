@@ -95,29 +95,29 @@ stat, p = stats.mannwhitneyu(noise_rewards_list, nonoise_rewards_list)
 
 print("p_value")
 print(p)
-print(stat)
+# print(stat)
 
 
-# best_noise = post_noise_sorted[-1:-5]
+best_noise = post_noise_sorted[-1]
 #
-# best_nonoise = post_nonoise_sorted[-1:-5]
+best_nonoise = post_nonoise_sorted[-1]
 
 
-# print('______________________best noise__________________-')
-# print(best_noise)
-# print('______________________best without noise__________________-')
-# print(best_nonoise)
+print('______________________best noise__________________-')
+print(best_noise)
+print('______________________best without noise__________________-')
+print(best_nonoise)
 
-##plotting 2 best policies
-# t1 = np.arange(len(post_noise_policies[best_noise]))
-# rewards_noise = post_noise_policies[best_noise]
-#
-# t2 = np.arange(len(post_nonoise_policies[best_nonoise]))
-# rewards_nonoise = post_nonoise_policies[best_nonoise]
-#
+#plotting 2 best policies
+t1 = np.arange(len(post_noise_policies[best_noise]))
+rewards_noise = post_noise_policies[best_noise]
+
+t2 = np.arange(len(post_nonoise_policies[best_nonoise]))
+rewards_nonoise = post_nonoise_policies[best_nonoise]
+
 # print(rewards_noise)
-#
-# plt.plot(t1,rewards_noise, label=best_noise)
-# plt.plot(t2,rewards_nonoise, label=best_nonoise)
-# plt.legend()
-# plt.show()
+
+plt.plot(t1,rewards_noise, label=best_noise)
+plt.plot(t2,rewards_nonoise, label=best_nonoise)
+plt.legend()
+plt.show()
